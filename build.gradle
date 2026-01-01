@@ -5,11 +5,13 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        classpath 'com.squareup.okhttp3:okhttp:4.12.0'
-        classpath 'org.json:json:20240303'
+        classpath "com.squareup.okhttp3:okhttp:4.12.0"
+        classpath "org.json:json:20251224"
     }
 }
 
 plugins {
-    id 'com.android.application' version '8.7.3' apply false
+    alias(libs.plugins.android.application) apply false
+    alias(libs.plugins.android.library) apply false
+    alias(libs.plugins.kotlin.android) apply false
 }

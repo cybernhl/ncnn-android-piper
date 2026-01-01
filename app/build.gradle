@@ -3,51 +3,38 @@ import okhttp3.Request
 import org.json.JSONObject
 
 plugins {
-    id 'com.android.application'
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.android)
 }
 
-// =====================================================================
-// == 1. NCNN 自動化設定
-// =====================================================================
-
-// 定義 NCNN 相關的全域變數
 ext {
-    // JNI 的根目錄
     ncnnJniDir = file("src/main/jni")
-    // 我們希望解壓縮後 NCNN 的固定資料夾名稱
     ncnnTargetDirName = "ncnn-android-vulkan"
-    // 組合出完整的 NCNN 資料夾路徑
     ncnnDir = file("${ncnnJniDir}/${ncnnTargetDirName}")
 }
 
 android {
     namespace 'com.tencent.piperncnn'
-    compileSdk 33
+    compileSdk 36
 
     defaultConfig {
         applicationId "com.tencent.piperncnn"
         archivesBaseName = "$applicationId"
-
-        minSdk 24
+        minSdk 21
 
         externalNativeBuild {
             cmake {
                 arguments "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON",
-                        // 將解壓後的 ncnn 目錄路徑傳遞給 CMake
-                        "-Dncnn_DIR_FROM_GRADLE=${project.ext.ncnnDir.absolutePath}"
+                          "-Dncnn_DIR_FROM_GRADLE=${project.ext.ncnnDir.absolutePath}"
             }
         }
     }
 
     externalNativeBuild {
         cmake {
-            version "3.22.1"
+            version "3.31.5"
             path file('src/main/jni/CMakeLists.txt')
         }
-    }
-
-    dependencies {
-        implementation 'com.android.support:support-v4:24.0.0'
     }
 
     packaging {
@@ -57,24 +44,18 @@ android {
     }
 }
 
-// 註冊一個名為 'setupNcnn' 的任務
 tasks.register('setupNcnn') {
     group = "NCNN Setup"
     description = "Downloads and extracts the latest NCNN library for Android Vulkan."
-
-    // 定義任務的輸出：解壓縮後的目標資料夾
     outputs.dir(project.ext.ncnnDir)
-
     doLast {
         println "==============================================="
         println "Executing 'setupNcnn' task..."
-
-        // --- 步驟 1: 查詢 URL (保持不變) ---
         def ncnnApiUrl = "https://api.github.com/repos/Tencent/ncnn/releases/latest"
         def client = new OkHttpClient()
         def request = new Request.Builder().url(ncnnApiUrl).build()
         def downloadUrl = ""
-        def zipRootFolderName = "" // 新增一個變數來儲存 zip 內的根目錄名稱
+        def zipRootFolderName = ""
 
         try {
             client.newCall(request).execute().withCloseable { response ->
@@ -90,7 +71,6 @@ tasks.register('setupNcnn') {
                     String name = asset.getString("name")
                     if (name.contains("-android-vulkan.zip")) {
                         downloadUrl = asset.getString("browser_download_url")
-                        // 從 zip 檔名推斷出其內部的根目錄名稱
                         zipRootFolderName = name.replace(".zip", "")
                         println "Found latest NCNN release asset: ${name}"
                         println "Download URL: ${downloadUrl}"
@@ -106,29 +86,17 @@ tasks.register('setupNcnn') {
         if (downloadUrl.isEmpty()) {
             throw new GradleException("Could not find 'ncnn-YYYYMMDD-android-vulkan.zip' in the latest release assets.")
         }
-
-        // --- 步驟 2: 下載 Zip 檔案 (保持不變) ---
         def outputZip = file("${buildDir}/downloads/ncnn.zip")
         outputZip.parentFile.mkdirs()
         new URL(downloadUrl).withInputStream { i -> outputZip.withOutputStream { o -> o << i } }
         println "Download complete: ${outputZip}"
-
-        // =====================================================================
-        // == 修正後的解壓縮步驟 ==
-        // =====================================================================
-        // --- 步驟 3: 解壓縮 Zip 檔案 ---
         println "Extracting ${outputZip} to ${project.ext.ncnnDir}..."
         project.copy {
             from(zipTree(outputZip))
             into(project.ext.ncnnDir)
-            // 關鍵：去掉第一層目錄
-            // eachFile 會對 zip 中的每個檔案執行操作
             eachFile { file ->
-                // file.path 是檔案在 zip 內的相對路徑，例如 "ncnn-20250916-android-vulkan/arm64-v8a/lib/..."
-                // 我們將路徑中的第一層根目錄 "ncnn-20250916-android-vulkan/" 去掉
                 file.path = file.path.replaceFirst("^${zipRootFolderName}/", "")
             }
-            // 告訴 copy 任務不要包含空的根目錄
             includeEmptyDirs = false
         }
 
@@ -137,8 +105,10 @@ tasks.register('setupNcnn') {
     }
 }
 
-// 讓 preBuild 任務依賴於我們的 setupNcnn 任務
-// 這樣在建置前，Gradle 會自動檢查並執行 setupNcnn
 tasks.named("preBuild").configure {
     dependsOn("setupNcnn")
+}
+
+dependencies {
+
 }
